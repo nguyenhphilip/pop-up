@@ -1,8 +1,14 @@
-// Cache basic files
+// ----- Caching core files -----
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open("whosout-v1").then(cache =>
-      cache.addAll(["/", "/index.html", "/manifest.json"])
+      cache.addAll([
+        "/",
+        "/index.html",
+        "/manifest.json",
+        "/icon-192.png",
+        "/icon-512.png"
+      ])
     )
   );
 });
@@ -13,7 +19,7 @@ self.addEventListener("fetch", event => {
   );
 });
 
-// Handle push notifications
+// ----- Handle push notifications -----
 self.addEventListener("push", event => {
   const data = event.data ? event.data.json() : {};
   const title = data.title || "Who’s Out";
@@ -28,4 +34,3 @@ self.addEventListener("push", event => {
 self.addEventListener("notificationclick", event => {
   event.notification.close();
   event.waitUntil(clients.openWindow("/"));
-});

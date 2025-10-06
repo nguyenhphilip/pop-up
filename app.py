@@ -8,13 +8,22 @@ from secrets import token_hex
 # Load .env
 load_dotenv()
 
+
 app = Flask(__name__, static_folder="static", static_url_path="")
+
 
 # ---------- CONFIG ----------
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
 VAPID_CLAIM_EMAIL = os.getenv("VAPID_CLAIM_EMAIL", "mailto:admin@local")
 DB_PATH = "broadcasts.db"
+
+
+@app.after_request
+def add_header(response):
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 
 # ---------- DATABASE ----------
 def get_db():
@@ -156,7 +165,7 @@ def delete_broadcast():
 
 @app.route("/")
 def serve_index():
-    return send_from_directory("static", "index.html")
+    return app.send_static_file("index.html")
 
 # ---------- MAIN ----------
 if __name__ == "__main__":
