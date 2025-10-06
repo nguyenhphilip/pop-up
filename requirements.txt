@@ -1,0 +1,4 @@
+Flask
+pywebpush
+cryptography
+python-dotenv

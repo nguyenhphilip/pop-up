@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pop-up</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#2a5db0">
+  <style>
+    body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 1em; }
+    h1 { text-align: center; color: #2a5db0; }
+    h2 { margin-top: 1.5em; color: #333; }
+    .broadcast { text-align: center; padding: 0.6em; border: 1px solid #ccc; }
+    input, select, button {
+      width: 100%; margin: 0.4em 0; padding: 0.6em;
+      border-radius: 5px; border: 1px solid #ccc;
+    }
+    button { background: #2a5db0; color: white; border: none; font-weight: bold; }
+    .out {background: rgb(51, 177, 51)}
+    .done {background: rgb(172, 103, 114)}
+    button:hover { background: #1f4b91; cursor: pointer; }
+    a { color: #2a5db0; text-decoration: none; }
+    #no-listings { text-align: center; color: #888; font-style: italic; margin-top: 1em; }
+    #last-updated { text-align: center; color: #777; font-size: 0.9em; margin-top: 0.5em; }
+  </style>
+</head>
+<body>
+  <h1>POP-UP</h1>
+  <div id="desc">
+  <p>Welcome! This is a simple web app for informal hangs. Broadcast to your friends/community where you're at, what you're up to by filling out the form below.</p>
+  <p>Every listing will expire after the amount of time set. (The unspecified duration hangs/pop-up events will expire after 12 hours.)</p>
+  </div>
+  <hr>
+  <h2 style="text-align: center;">Current happenings</h2>
+    <div id="list"></div>
+    <div id="no-listings" style="display:none;">There are no listings at the moment.</div>
+    <br>
+    <div id="last-updated"></div>
+    <br>
+    <hr>
+  <div id="form">
+    <h2 style="text-align: center;">Create a listing</h2>
+    <label for="user">Name:</label><input name="user" id="user" placeholder="e.g. Phil Nguyen">
+    <label for="user">Description/Location:</label><input name="note" id="note" placeholder="e.g. Coffee and chill at Pan Pan in Greenpoint">
+    <label for="user">Duration:</label>
+    <select name="duration" id="duration">
+      <option value="1">1 hour</option>
+      <option value="2" selected>2 hours</option>
+      <option value="3">3 hours</option>
+      <option value="unspecified">Unspecified</option>
+    </select>
+    <br>
+    <br>
+    <button onclick="getLocation()">📍 Share My Location (optional)</button>
+    <input type="hidden" id="lat">
+    <input type="hidden" id="lon">
+    <button class="out" onclick="postBroadcast()">Create your listing</button>
+    <br>
+    <br>
+    <hr>
+    <p>If you want to remove your listing, click below:</p>
+    <button class="done" onclick="deleteMyBroadcast()">I’m done!</button>
+  </div>
+
+  <script>
+    const api = "/broadcasts";
+
+    // ---------- POST BROADCAST ----------
+    async function postBroadcast() {
+      const user = document.getElementById("user").value.trim();
+      const note = document.getElementById("note").value.trim();
+      const durationValue = document.getElementById("duration").value;
+      const duration_hours = durationValue === "unspecified" ? null : Number(durationValue);
+      const lat = document.getElementById("lat").value || null;
+      const lon = document.getElementById("lon").value || null;
+      if (!user || !note) return alert("Enter your name and note first!");
+      localStorage.setItem("username", user);
+
+      const res = await fetch(api, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ user, note, duration_hours, lat, lon })
+      });
+      const data = await res.json();
+
+      if (data.delete_token) localStorage.setItem("delete_token", data.delete_token);
+
+      document.getElementById("note").value = "";
+      document.getElementById("lat").value = "";
+      document.getElementById("lon").value = "";
+      loadBroadcasts();
+    }
+
+    // ---------- DELETE BROADCAST ----------
+    async function deleteMyBroadcast() {
+      const token = localStorage.getItem("delete_token");
+      if (!token) return alert("No active broadcast found to delete.");
+
+      const res = await fetch("/delete_broadcast", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ delete_token: token })
+      });
+
+      if (res.ok) {
+        alert("Your broadcast has been cleared!");
+        localStorage.removeItem("delete_token");
+        loadBroadcasts();
+      } else {
+        alert("Could not delete broadcast — maybe it already expired?");
+      }
+    }
+
+    // ---------- LOCATION ----------
+    function getLocation() {
+      if (!navigator.geolocation) return alert("Geolocation not supported");
+      navigator.geolocation.getCurrentPosition(pos => {
+        document.getElementById("lat").value = pos.coords.latitude;
+        document.getElementById("lon").value = pos.coords.longitude;
+        alert("Location attached for this post.");
+      }, err => alert("Could not get location"));
+    }
+
+    // ---------- LOAD BROADCASTS ----------
+    async function loadBroadcasts() {
+      const res = await fetch(api);
+      const data = await res.json();
+      const list = document.getElementById("list");
+      const noListings = document.getElementById("no-listings");
+      const lastUpdated = document.getElementById("last-updated");
+      list.innerHTML = "";
+
+      if (data.length === 0) {
+        noListings.style.display = "block";
+      } else {
+        noListings.style.display = "none";
+        data.forEach(b => {
+          let line = `<b>${b.user}</b> — ${b.note}`;
+          if (b.duration_hours === null) {
+            line += ` (time unspecified)`;
+          } else {
+            const end = new Date(b.expires_at)
+              .toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            line += ` (until ${end})`;
+          }
+          if (b.lat && b.lon) {
+            const osm = `https://www.openstreetmap.org/?mlat=${b.lat}&mlon=${b.lon}#map=16/${b.lat}/${b.lon}`;
+            line += ` <a href="${osm}" target="_blank">📍View Map</a>`;
+          }
+          list.innerHTML += `<div class="broadcast">${line}</div>`;
+        });
+      }
+
+      // Update friendly timestamp
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+      lastUpdated.textContent = `[Last updated: ${timeStr}]`;
+    }
+
+    // ---------- INITIAL LOAD ----------
+    document.getElementById("user").value = localStorage.getItem("username") || "";
+    loadBroadcasts();
+    setInterval(loadBroadcasts, 60000);
+
+    // ---------- SERVICE WORKER + PUSH ----------
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/service-worker.js").then(async reg => {
+        console.log("Service Worker registered.");
+        const res = await fetch("/vapid_public_key");
+        const data = await res.json();
+        const vapidKey = urlBase64ToUint8Array(data.key);
+
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: vapidKey
+          });
+          await fetch("/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(sub)
+          });
+          console.log("Subscribed to push notifications.");
+        }
+      });
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = "=".repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding)
+        .replace(/-/g, "+").replace(/_/g, "/");
+      const rawData = atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+  </script>
+</body>
+</html>
