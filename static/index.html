@@ -40,11 +40,11 @@
     <hr>
   <div id="form">
     <h2 style="text-align: center;">Create a listing</h2>
-    <div id="form" autocomplete="off" autocorrect="off" spellcheck="false">
+    <form id="popup-form" autocomplete="off" novalidate>
         <input type="text" style="display:none" autocomplete="false">
-        Name:<input name="popup_user" id="user" placeholder="e.g. Phil Nguyen" autocomplete="name" inputmode="text" autocapitalize="words" aria-label="Your name">
-        Description/Location:<input name="popup_note" id="note" placeholder="e.g. Coffee and chill at Pan Pan in Greenpoint" autocomplete="nope" autocorrect="off" spellcheck="false" inputmode="text" autocapitalize="sentences" aria-label="Description of your hangout">
-        Duration:
+        <label for="user">Name:</label><input name="user_name" id="user" placeholder="e.g. Phil Nguyen" autocomplete="name" inputmode="text" name="note" autocapitalize="words">
+        <label for="user">Description/Location:</label><input name="popup_note" id="note" placeholder="e.g. Coffee and chill at Pan Pan in Greenpoint" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="text" autocapitalize="sentences" aria-label="Description of your hangout">
+        <label for="user">Duration:</label>
         <select name="duration" id="duration">
         <option value="1">1 hour</option>
         <option value="2" selected>2 hours</option>
@@ -60,6 +60,7 @@
         <br>
         <p>To remove your listing early, click below:</p>
         <button class="done" onclick="deleteMyBroadcast()">I’m done!</button>
+    </form>
   </div>
   <hr>
   <div id="install">
