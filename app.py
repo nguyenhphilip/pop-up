@@ -63,23 +63,33 @@ def create_broadcast():
     data = request.get_json(silent=True) or {}
     user = (data.get("user") or "").strip()
     note = (data.get("note") or "").strip()
+    device_id = (data.get("device_id") or "").strip()
+
     if not user or not note:
         return jsonify({"error": "Missing user or note"}), 400
+    if not device_id:
+        return jsonify({"error": "Missing device ID"}), 400
 
-    duration = data.get("duration_hours")
-    duration_hours = None if duration is None else float(duration)
-    hours = 12 if duration_hours is None else duration_hours
-    
-    expires_at_dt = datetime.now(timezone.utc) + timedelta(hours=hours)
-    expires_at = expires_at_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-
-    delete_token = token_hex(16)
-
+    # Check if this device already has an active broadcast
+    now = datetime.now().isoformat()
     with get_db() as conn:
+        existing = conn.execute("""
+            SELECT id FROM broadcasts
+            WHERE device_id = ? AND expires_at > ?
+        """, (device_id, now)).fetchone()
+        if existing:
+            conn.execute("DELETE FROM broadcasts WHERE id = ?", (existing["id"],))
+
+        duration = data.get("duration_hours")
+        duration_hours = None if duration is None else float(duration)
+        hours = 12 if duration_hours is None else duration_hours
+        expires_at = (datetime.now() + timedelta(hours=hours)).isoformat()
+        delete_token = token_hex(16)
+
         conn.execute("""
-            INSERT INTO broadcasts (user, note, lat, lon, expires_at, delete_token, duration_hours)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (user, note, data.get("lat"), data.get("lon"), expires_at, delete_token, duration_hours))
+            INSERT INTO broadcasts (user, note, lat, lon, expires_at, delete_token, duration_hours, device_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user, note, data.get("lat"), data.get("lon"), expires_at, delete_token, duration_hours, device_id))
         conn.commit()
 
     publish_event("new_broadcast", {"user": user, "note": note, "expires_at": expires_at})

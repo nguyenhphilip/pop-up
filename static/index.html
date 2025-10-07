@@ -166,14 +166,16 @@
     </footer>
 
     <script>
+        // Generate a unique persistent device ID
+    if (!localStorage.getItem("device_id")) {
+        localStorage.setItem("device_id", crypto.randomUUID());
+    }
+    
+    const device_id = localStorage.getItem("device_id");
     document.getElementById("popup-form").addEventListener("submit", e => e.preventDefault());
     
-    console.log("App script loaded."); // confirms your JS is running
-    document.querySelector(".out").addEventListener("click", () => {
-        console.log("Create Listing button clicked");
-    });
-    
     const api = "/broadcasts";
+    const spinner = document.getElementById("loading-indicator");
     
     // Toast helper: lightweight inline confirmation messages
     function showToast(message, type = "info", duration = 3000) {
@@ -206,15 +208,12 @@
         if (type !== "info" && "vibrate" in navigator) navigator.vibrate(20);
     }
 
-    const spinner = document.getElementById("loading-indicator");
 
     function setLoading(show) {
         spinner.style.display = show ? "block" : "none";
     }
 
-    async function postBroadcast(event) {
-        if (event) event.preventDefault();
-        console.log("postBroadcast() called");
+    async function postBroadcast(event) {        
 
         const btn = document.querySelector(".out");
         btn.disabled = true;
@@ -246,16 +245,22 @@
             list.prepend(temp);
 
             const res = await fetch("/broadcasts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user, note, duration_hours, lat, lon })
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user, note, duration_hours, lat, lon, device_id })
             });
 
             console.log("Response status:", res.status);
 
             if (!res.ok) {
                 const txt = await res.text();
-                throw new Error(txt || `HTTP ${res.status}`);
+                console.warn("Server error:", txt);
+                if (txt.includes("already have an active broadcast")) {
+                    showToast("You already have an active pop-up!", "info");
+                } else {
+                    showToast("Could not post broadcast.", "error");
+                }
+                return;
             }
 
             const data = await res.json();
@@ -308,9 +313,9 @@
 
         navigator.geolocation.getCurrentPosition(
             pos => {
-            document.getElementById("lat").value = pos.coords.latitude.toFixed(6);
-            document.getElementById("lon").value = pos.coords.longitude.toFixed(6);
-            showToast(`Location attached: (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
+                document.getElementById("lat").value = pos.coords.latitude.toFixed(6);
+                document.getElementById("lon").value = pos.coords.longitude.toFixed(6);
+                showToast(`Location attached: (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
             },
             err => {
             console.error("Location error:", err);
@@ -383,11 +388,12 @@
 
     // ---------- SSE Live Updates ----------
     if ("EventSource" in window) {
-      const evt = new EventSource("/stream");
-      evt.addEventListener("new_broadcast", e => loadBroadcasts());
-      evt.addEventListener("refresh", e => loadBroadcasts());
+        const evt = new EventSource("/stream");
+        evt.addEventListener("new_broadcast", e => loadBroadcasts());
+        evt.addEventListener("refresh", e => loadBroadcasts());
+        setInterval(loadBroadcasts, 120000);
     } else {
-      setInterval(loadBroadcasts, 60000);
+        setInterval(loadBroadcasts, 120000);
     }
 
     document.getElementById("user").value = localStorage.getItem("username") || "";
