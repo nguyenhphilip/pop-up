@@ -221,6 +221,7 @@
         btn.disabled = true;
         const original = btn.textContent;
         btn.textContent = "Posting...";
+        setLoading(true);
 
         try {
             const user = document.getElementById("user").value.trim();
@@ -230,8 +231,6 @@
             const lat = document.getElementById("lat").value || null;
             const lon = document.getElementById("lon").value || null;
 
-            console.log("Sending payload:", { user, note, duration_hours, lat, lon });
-
             if (!user || !note) {
                 showToast("Enter your name and description first.", "error");
                 return;
@@ -239,12 +238,8 @@
 
             localStorage.setItem("username", user);
 
-            // Optimistic display
-            const list = document.getElementById("list");
-            const temp = document.createElement("div");
-            temp.className = "broadcast new";
-            temp.innerHTML = `<b>${user}</b> — ${note} (posting...)`;
-            list.prepend(temp);
+            // Instead of showing a temporary entry
+            showToast("Posting your pop-up...", "info", 1500);
 
             const res = await fetch("/broadcasts", {
                 method: "POST",
@@ -252,11 +247,10 @@
                 body: JSON.stringify({ user, note, duration_hours, lat, lon, device_id })
             });
 
-            console.log("Response status:", res.status);
-
             if (!res.ok) {
                 const txt = await res.text();
                 console.warn("Server error:", txt);
+
                 if (txt.includes("already have an active broadcast")) {
                     showToast("You already have an active pop-up!", "info");
                 } else {
@@ -280,8 +274,11 @@
         } finally {
             btn.disabled = false;
             btn.textContent = original;
+            setLoading(false);
         }
     }
+
+
 
 
     async function deleteMyBroadcast(event) {
