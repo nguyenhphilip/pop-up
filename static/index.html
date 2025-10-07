@@ -40,24 +40,27 @@
     <hr>
   <div id="form">
     <h2 style="text-align: center;">Create a listing</h2>
-    <label for="user">Name:</label><input name="user" id="user" placeholder="e.g. Phil Nguyen" autocomplete="off" inputmode="text" name="note" autocapitalize="sentences">
-    <label for="user">Description/Location:</label><input name="note" id="note" placeholder="e.g. Coffee and chill at Pan Pan in Greenpoint" autocomplete="off" inputmode="text" name="note" autocapitalize="sentences">
-    <label for="user">Duration:</label>
-    <select name="duration" id="duration">
-      <option value="1">1 hour</option>
-      <option value="2" selected>2 hours</option>
-      <option value="3">3 hours</option>
-      <option value="unspecified">Unspecified</option>
-    </select>
-    <br>
-    <br>
-    <button onclick="getLocation()">📍 Share My Location (optional)</button>
-    <input type="hidden" id="lat">
-    <input type="hidden" id="lon">
-    <button class="out" onclick="postBroadcast()">Create your listing</button>
-    <br>
-    <p>To remove your listing early, click below:</p>
-    <button class="done" onclick="deleteMyBroadcast()">I’m done!</button>
+    <form id="popup-form" autocomplete="off" novalidate>
+        <input type="text" style="display:none" autocomplete="false">
+        <label for="user">Name:</label><input name="user_name" id="user" placeholder="e.g. Phil Nguyen" autocomplete="name" inputmode="text" name="note" autocapitalize="words">
+        <label for="user">Description/Location:</label><input name="popup_note" id="note" placeholder="e.g. Coffee and chill at Pan Pan in Greenpoint" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="text" autocapitalize="sentences" aria-label="Description of your hangout">
+        <label for="user">Duration:</label>
+        <select name="duration" id="duration">
+        <option value="1">1 hour</option>
+        <option value="2" selected>2 hours</option>
+        <option value="3">3 hours</option>
+        <option value="unspecified">Unspecified</option>
+        </select>
+        <br>
+        <br>
+        <button onclick="getLocation()">📍 Share My Location (optional)</button>
+        <input type="hidden" id="lat">
+        <input type="hidden" id="lon">
+        <button class="out" onclick="postBroadcast()">Create your listing</button>
+        <br>
+        <p>To remove your listing early, click below:</p>
+        <button class="done" onclick="deleteMyBroadcast()">I’m done!</button>
+    </form>
   </div>
   <hr>
   <div id="install">
