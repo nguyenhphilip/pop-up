@@ -78,111 +78,208 @@
       margin-left: 5px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+
+    /* Toast notifications */
+    #toast-container {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px; /* auto-spacing between stacked toasts */
+        pointer-events: none; /* clicks pass through */
+    }
+
+    .toast {
+        background: #333;
+        color: #fff;
+        padding: 10px 16px;
+        border-radius: 6px;
+        opacity: 0;
+        transform: translateY(-10px);
+        transition: all 0.4s ease;
+        font-size: 0.95em;
+        text-align: center;
+        max-width: 90vw;
+        min-width: 200px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        pointer-events: auto; /* toast itself clickable if needed */
+    }
+    .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .toast:hover {
+        opacity: 0.85;
+        cursor: pointer;
+    }
+    .toast.success { background: #33b133; }
+    .toast.error { background: #d9534f; }
+    .toast.info { background: #555; }
+    </style>
 </head>
 <body>
-  <h1>POP-UP HANG</h1>
-  <div id="desc" style="text-align: justify;">
-    <p>Broadcast spontaneous hangouts to your friends or community.</p>
-    <p>Every broadcast will expire after a set amount of time. (The unspecified duration broadcasts will expire after 12 hours.)</p>
-    <p><em>The best way to use this tool is in a web browser (e.g. Safari). If you think you'll end the broadcast/"pop-up" early, leave this website open as a tab and click the "I'm Done" button at the bottom when you want to end things.</em></p>
-  </div>
-  <hr>
-  <h2 style="text-align: center;">Current happenings</h2>
-  <div class="spinner" id="loading-indicator">Loading</div>
+    <div id="toast-container"></div>
+    <h1>POP-UP HANG</h1>
+    <div id="desc" style="text-align: justify;">
+        <p>Broadcast spontaneous hangouts to your friends or community.</p>
+        <p>Every broadcast will expire after a set amount of time. (The unspecified duration broadcasts will expire after 12 hours.)</p>
+        <p><em>The best way to use this tool is in a web browser (e.g. Safari). If you think you'll end the broadcast/"pop-up" early, leave this website open as a tab and click the "I'm Done" button at the bottom when you want to end things.</em></p>
+    </div>
+    <hr>
+    <h2 style="text-align: center;">Current happenings</h2>
+    <div class="spinner" id="loading-indicator">Loading</div>
     <div id="list"></div>
     <div id="no-listings" style="display:none;">There are no listings at the moment.</div>
     <div id="last-updated"></div>
     <br>
     <hr>
 
-  <div id="form">
-    <h2 style="text-align: center;">Create a listing</h2>
-    <form id="popup-form" autocomplete="off" novalidate>
-        <label for="user">Name:</label><input name="user_name" id="user" placeholder="e.g. Phil Nguyen" autocomplete="name" inputmode="text" name="note" autocapitalize="words">
-        <label for="user">Description/Location:</label><textarea id="note"name="popup_note" placeholder="e.g. Coffee at Pan Pan in Greenpoint" rows="3" autocomplete="off" autocorrect="on" spellcheck="true" autocapitalize="sentences" aria-label="Description of your hangout" style="width: 100%; margin: 0.4em 0; padding: 0.6em; border-radius: 5px; border: 1px solid #ccc; resize: vertical;"></textarea>
-        <label for="user">Duration:</label>
-        <select name="duration" id="duration">
-        <option value="1">1 hour</option>
-        <option value="2" selected>2 hours</option>
-        <option value="3">3 hours</option>
-        <option value="unspecified">Unspecified</option>
-        </select>
-        <br>
-        <br>
-        <button type="button" onclick="getLocation()">📍 Share My Location (optional)</button>
-        <input type="hidden" id="lat">
-        <input type="hidden" id="lon">
-        <button type="button" class="out" onclick="postBroadcast()">Create your listing</button>
-        <p>To remove your listing early, click below:</p>
-        <button type="button" class="done" onclick="deleteMyBroadcast()">I’m done!</button>
-    </form>
-  </div>
-  <hr>
-  <footer style="text-align: center;">
-    <p><em>Created by <a href="https://philintheblank.me">Phil.</a></em></p>
-  </footer>
-     <script>
+    <div id="form">
+        <h2 style="text-align: center;">Create a listing</h2>
+        <form id="popup-form" autocomplete="off" novalidate>
+            <label for="user_name">Name:</label><input id="user" name="user_name" placeholder="e.g. Phil Nguyen" autocomplete="name" inputmode="text" autocapitalize="words">
+            <label for="popup_note">Description/Location:</label><textarea id="note"name="popup_note" placeholder="e.g. Coffee at Pan Pan in Greenpoint" rows="3" autocomplete="off" autocorrect="on" spellcheck="true" autocapitalize="sentences" aria-label="Description of your hangout" style="width: 100%; margin: 0.4em 0; padding: 0.6em; border-radius: 5px; border: 1px solid #ccc; resize: vertical;"></textarea>
+            <label for="duration">Duration:</label>
+            <select name="duration" id="duration">
+                <option value="1">1 hour</option>
+                <option value="2" selected>2 hours</option>
+                <option value="3">3 hours</option>
+                <option value="unspecified">Unspecified</option>
+            </select>
+            <br>
+            <br>
+            <button type="button" onclick="getLocation()">📍 Share My Location (optional)</button>
+            <input type="hidden" id="lat">
+            <input type="hidden" id="lon">
+            <button type="button" class="out" onclick="postBroadcast(event)">Create your listing</button>
+            <p>To remove your listing early, click below:</p>
+            <button type="button" class="done" onclick="deleteMyBroadcast(event)">I’m done!</button>
+        </form>
+    </div>
+    <hr>
+    <footer style="text-align: center;">
+        <p><em>Created by <a href="https://philintheblank.me">Phil.</a></em></p>
+    </footer>
+
+    <script>
+    document.getElementById("popup-form").addEventListener("submit", e => e.preventDefault());
+    
+    console.log("App script loaded."); // confirms your JS is running
+    document.querySelector(".out").addEventListener("click", () => {
+        console.log("Create Listing button clicked");
+    });
+    
     const api = "/broadcasts";
+    
+    // Toast helper: lightweight inline confirmation messages
+    function showToast(message, type = "info", duration = 3000) {
+        const container = document.getElementById("toast-container");
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+
+        // Limit maximum visible toasts (optional)
+        const toasts = container.querySelectorAll(".toast");
+        if (toasts.length > 3) toasts[0].remove();
+
+        // Click-to-dismiss
+        toast.addEventListener("click", () => {
+            toast.classList.remove("show");
+            setTimeout(() => toast.remove(), 300);
+        });
+
+        // Trigger appearance animation
+        setTimeout(() => toast.classList.add("show"), 50);
+
+        // Auto-remove after duration
+        setTimeout(() => {
+            toast.classList.remove("show");
+            setTimeout(() => toast.remove(), 400);
+        }, duration);
+
+        // Optional mobile vibration feedback
+        if (type !== "info" && "vibrate" in navigator) navigator.vibrate(20);
+    }
+
     const spinner = document.getElementById("loading-indicator");
 
     function setLoading(show) {
-      spinner.style.display = show ? "block" : "none";
+        spinner.style.display = show ? "block" : "none";
     }
 
-    async function postBroadcast() {
-      const btn = document.querySelector(".out");
-      btn.disabled = true;
-      const original = btn.textContent;
-      btn.textContent = "Posting...";
+    async function postBroadcast(event) {
+        if (event) event.preventDefault();
+        console.log("postBroadcast() called");
 
-      try {
-        const user = document.getElementById("user").value.trim();
-        const note = document.getElementById("note").value.trim();
-        const durationValue = document.getElementById("duration").value;
-        const duration_hours = durationValue === "unspecified" ? null : Number(durationValue);
-        const lat = document.getElementById("lat").value || null;
-        const lon = document.getElementById("lon").value || null;
-        if (!user || !note) {
-          alert("Enter your name and description first!");
-          return;
+        const btn = document.querySelector(".out");
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = "Posting...";
+
+        try {
+            const user = document.getElementById("user").value.trim();
+            const note = document.getElementById("note").value.trim();
+            const durationValue = document.getElementById("duration").value;
+            const duration_hours = durationValue === "unspecified" ? null : Number(durationValue);
+            const lat = document.getElementById("lat").value || null;
+            const lon = document.getElementById("lon").value || null;
+
+            console.log("Sending payload:", { user, note, duration_hours, lat, lon });
+
+            if (!user || !note) {
+                showToast("Enter your name and description first.", "error");
+                return;
+            }
+
+            localStorage.setItem("username", user);
+
+            // Optimistic display
+            const list = document.getElementById("list");
+            const temp = document.createElement("div");
+            temp.className = "broadcast new";
+            temp.innerHTML = `<b>${user}</b> — ${note} (posting...)`;
+            list.prepend(temp);
+
+            const res = await fetch("/broadcasts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user, note, duration_hours, lat, lon })
+            });
+
+            console.log("Response status:", res.status);
+
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || `HTTP ${res.status}`);
+            }
+
+            const data = await res.json();
+            if (data.delete_token) localStorage.setItem("delete_token", data.delete_token);
+
+            document.getElementById("note").value = "";
+            document.getElementById("lat").value = "";
+            document.getElementById("lon").value = "";
+
+            await loadBroadcasts();
+            showToast("✅ Listing posted!", "success");
+        } catch (err) {
+            console.error("Broadcast error:", err);
+            showToast("Could not post broadcast. Try again.", "error");
+        } finally {
+            btn.disabled = false;
+            btn.textContent = original;
         }
-
-        localStorage.setItem("username", user);
-
-        // Optimistic display
-        const list = document.getElementById("list");
-        const temp = document.createElement("div");
-        temp.className = "broadcast new";
-        temp.innerHTML = `<b>${user}</b> — ${note} (posting...)`;
-        list.prepend(temp);
-
-        const res = await fetch(api, {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({ user, note, duration_hours, lat, lon })
-        });
-
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        if (data.delete_token) localStorage.setItem("delete_token", data.delete_token);
-
-        document.getElementById("note").value = "";
-        document.getElementById("lat").value = "";
-        document.getElementById("lon").value = "";
-        await loadBroadcasts();
-      } catch (err) {
-        console.error("Broadcast error:", err);
-        alert("Could not post broadcast. Try again.");
-      } finally {
-        btn.disabled = false;
-        btn.textContent = original;
-      }
     }
 
-    async function deleteMyBroadcast() {
+
+    async function deleteMyBroadcast(event) {
       const token = localStorage.getItem("delete_token");
-      if (!token) return alert("No active broadcast found.");
+      if (!token) return showToast("No active broadcast found.");
       const btn = document.querySelector(".done");
       btn.disabled = true;
       const original = btn.textContent;
@@ -194,11 +291,11 @@
           body: JSON.stringify({ delete_token: token })
         });
         if (res.ok) {
-          alert("Your broadcast has been cleared!");
+          showToast("Your broadcast has been cleared!");
           localStorage.removeItem("delete_token");
           loadBroadcasts();
         } else {
-          alert("Could not delete broadcast. Maybe it already expired?");
+          showToast("Could not delete broadcast. Maybe it already expired?");
         }
       } finally {
         btn.disabled = false;
@@ -207,15 +304,28 @@
     }
 
     function getLocation() {
-      if (!navigator.geolocation) return alert("Geolocation not supported.");
-      navigator.geolocation.getCurrentPosition(pos => {
-        document.getElementById("lat").value = pos.coords.latitude;
-        document.getElementById("lon").value = pos.coords.longitude;
-        alert("Location attached for this post.");
-      }, err => {
-        console.error(err);
-        alert("Could not get location. Check permissions.");
-      });
+        if (!navigator.geolocation) return showToast("Geolocation not supported.");
+
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+            document.getElementById("lat").value = pos.coords.latitude.toFixed(6);
+            document.getElementById("lon").value = pos.coords.longitude.toFixed(6);
+            showToast(`Location attached: (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
+            },
+            err => {
+            console.error("Location error:", err);
+            let message = "Could not get location.";
+            if (err.code === 1) message += " (Permission denied)";
+            else if (err.code === 2) message += " (Position unavailable)";
+            else if (err.code === 3) message += " (Timed out)";
+            showToast(message);
+            },
+            {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+            }
+        );
     }
 
     async function loadBroadcasts() {
@@ -282,6 +392,6 @@
 
     document.getElementById("user").value = localStorage.getItem("username") || "";
     loadBroadcasts();
-  </script>
+    </script>
 </body>
 </html>

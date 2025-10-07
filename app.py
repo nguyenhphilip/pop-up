@@ -66,7 +66,7 @@ def create_broadcast():
     duration = data.get("duration_hours")
     duration_hours = None if duration is None else float(duration)
     hours = 12 if duration_hours is None else duration_hours
-    expires_at = (datetime.utcnow() + timedelta(hours=hours)).isoformat()
+    expires_at = (datetime.now() + timedelta(hours=hours)).isoformat()
     delete_token = token_hex(16)
 
     with get_db() as conn:
@@ -81,7 +81,7 @@ def create_broadcast():
 
 @app.route("/broadcasts", methods=["GET"])
 def list_broadcasts():
-    now = datetime.utcnow().isoformat()
+    now = datetime.now().isoformat()  # was utcnow()
     with get_db() as conn:
         rows = conn.execute("""
             SELECT * FROM broadcasts
@@ -111,14 +111,16 @@ def serve_index():
 
 # ---------- AUTO-CLEANUP JOB ----------
 def cleanup_expired_broadcasts(interval_hours=1):
-    """Periodically delete expired broadcasts every few hours."""
     while True:
         time.sleep(interval_hours * 3600)
         try:
             with get_db() as conn:
-                conn.execute("DELETE FROM broadcasts WHERE expires_at < ?", (datetime.utcnow().isoformat(),))
+                conn.execute(
+                    "DELETE FROM broadcasts WHERE expires_at < ?",
+                    (datetime.now().isoformat(),)  # was utcnow()
+                )
                 conn.commit()
-            print(f"[CLEANUP] Expired broadcasts removed at {datetime.utcnow().isoformat()}")
+            print(f"[CLEANUP] Expired broadcasts removed at {datetime.now().isoformat()}")
         except Exception as e:
             print("[CLEANUP ERROR]", e)
 
