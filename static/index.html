@@ -82,9 +82,10 @@
 </head>
 <body>
   <h1>POP-UP HANG</h1>
-  <div id="desc">
+  <div id="desc" style="text-align: justify;">
     <p>Broadcast spontaneous hangouts to your friends or community.</p>
-    <p>Every listing will expire after the amount of time set. (The unspecified duration hangs/pop-up events will expire after 12 hours.)</p>
+    <p>Every broadcast will expire after a set amount of time. (The unspecified duration broadcasts will expire after 12 hours.)</p>
+    <p><em>The best way to use this tool is in a web browser (e.g. Safari). If you think you'll end the broadcast/"pop-up" early, leave this website open as a tab and click the "I'm Done" button at the bottom when you want to end things.</em></p>
   </div>
   <hr>
   <h2 style="text-align: center;">Current happenings</h2>
@@ -92,6 +93,7 @@
     <div id="list"></div>
     <div id="no-listings" style="display:none;">There are no listings at the moment.</div>
     <div id="last-updated"></div>
+    <br>
     <hr>
 
   <div id="form">
@@ -116,7 +118,10 @@
         <button type="button" class="done" onclick="deleteMyBroadcast()">I’m done!</button>
     </form>
   </div>
-
+  <hr>
+  <footer style="text-align: center;">
+    <p><em>Created by <a href="https://philintheblank.me">Phil.</a></em></p>
+  </footer>
      <script>
     const api = "/broadcasts";
     const spinner = document.getElementById("loading-indicator");
