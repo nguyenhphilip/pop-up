@@ -3,13 +3,14 @@ from datetime import datetime, timedelta, timezone
 import sqlite3, json, queue, threading, time
 from secrets import token_hex
 import os
+import sys
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 DB_PATH = os.getenv("DB_PATH", "broadcasts.db")
 
 # ---------- DATABASE ----------
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=1)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -47,12 +48,14 @@ def stream():
             while True:
                 msg = q.get()
                 yield msg
+                sys.stdout.flush()
         except GeneratorExit:
             pass
 
     q = queue.Queue()
     listeners.append(q)
     return Response(event_stream(q), mimetype="text/event-stream")
+
 
 # ---------- ROUTES ----------
 @app.route("/broadcasts", methods=["POST"])
@@ -115,15 +118,13 @@ def serve_index():
 # ---------- AUTO-CLEANUP JOB ----------
 def cleanup_expired_broadcasts(interval_hours=1):
     while True:
-        time.sleep(interval_hours * 3600)
         try:
-            cutoff = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
             with get_db() as conn:
-                conn.execute("DELETE FROM broadcasts WHERE expires_at < ?", (cutoff,))
+                conn.execute("DELETE FROM broadcasts WHERE expires_at < ?", (datetime.now().isoformat(),))
                 conn.commit()
-            print(f"[CLEANUP] Expired broadcasts removed at {cutoff}")
         except Exception as e:
             print("[CLEANUP ERROR]", e)
+        time.sleep(interval_hours * 3600)
 
 # Start background cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_expired_broadcasts, daemon=True)
@@ -131,4 +132,4 @@ cleanup_thread.start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, threaded=True)
