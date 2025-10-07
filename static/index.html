@@ -3,55 +3,102 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pop-up hang</title>
-  <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#2a5db0">
+  <title>Pop-up Hang</title>
   <style>
     body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 1em; }
     h1 { text-align: center; color: #2a5db0; }
     h2 { margin-top: 1.5em; color: #333; }
-    .broadcast { text-align: center; padding: 0.6em; border: 1px solid #ccc; }
-    input, select, button {
-      width: 100%; margin: 0.4em 0; padding: 0.6em;
-      border-radius: 5px; border: 1px solid #ccc;
+    .broadcast {
+      text-align: center;
+      padding: 0.6em;
+      border: 1px solid #ccc;
+      margin-bottom: 0.5em;
+      border-radius: 6px;
+      transition: background-color 0.6s ease, color 0.6s ease, opacity 0.6s ease;
     }
-    button { background: #2a5db0; color: white; border: none; font-weight: bold; }
-    .out {background: rgb(51, 177, 51)}
-    .done {background: rgb(172, 103, 114)}
+    .broadcast.new {
+      background-color: #e7f3ff;
+      animation: fadeOut 3s forwards;
+    }
+    @keyframes fadeOut {
+      0% { background-color: #e7f3ff; }
+      100% { background-color: white; }
+    }
+
+    /* Soon-expiring visual */
+    .broadcast.soon {
+      background-color: #fff3cd;
+      border-color: #e0c36d;
+    }
+    .broadcast.expired {
+      opacity: 0.6;
+      color: #777;
+    }
+
+    input, select, button, textarea {
+      width: 100%;
+      margin: 0.4em 0;
+      padding: 0.6em;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 1em;
+    }
+    button {
+      background: #2a5db0;
+      color: white;
+      border: none;
+      font-weight: bold;
+      transition: opacity 0.2s ease;
+    }
     button:hover { background: #1f4b91; cursor: pointer; }
-    a { color: #2a5db0; text-decoration: none; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .out { background: #33b133; }
+    .done { background: #ac6772; }
+
     #no-listings { text-align: center; color: #888; font-style: italic; margin-top: 1em; }
     #last-updated { text-align: center; color: #777; font-size: 0.9em; margin-top: 0.5em; }
-    textarea {
-        font-family: inherit;
-        font-size: 1em;
+
+    /* Loading spinner */
+    .spinner {
+      display: none;
+      text-align: center;
+      margin-top: 1em;
     }
-    .optimistic {
-        opacity: 0.7;
-        font-style: italic;
+    .spinner:after {
+      content: "";
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 3px solid #2a5db0;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-left: 5px;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
   <h1>POP-UP HANG</h1>
   <div id="desc">
-  <p>Welcome! This is a simple web app for informal hangs. Broadcast to your friends/community where you're at, what you're up to by filling out the form below.</p>
-  <p>Every listing will expire after the amount of time set. (The unspecified duration hangs/pop-up events will expire after 12 hours.)</p>
+    <p>Broadcast spontaneous hangouts to your friends or community.</p>
+    <p>Every listing will expire after the amount of time set. (The unspecified duration hangs/pop-up events will expire after 12 hours.)</p>
   </div>
   <hr>
   <h2 style="text-align: center;">Current happenings</h2>
+  <div class="spinner" id="loading-indicator">Loading</div>
     <div id="list"></div>
     <div id="no-listings" style="display:none;">There are no listings at the moment.</div>
-    <br>
     <div id="last-updated"></div>
-    <br>
     <hr>
+
   <div id="form">
     <h2 style="text-align: center;">Create a listing</h2>
     <form id="popup-form" autocomplete="off" novalidate>
-        <input type="text" style="display:none" autocomplete="false">
         <label for="user">Name:</label><input name="user_name" id="user" placeholder="e.g. Phil Nguyen" autocomplete="name" inputmode="text" name="note" autocapitalize="words">
-        <label for="user">Description/Location:</label><textarea id="note"name="popup_note" placeholder="e.g. Coffee at Pan Pan in Greenpoint" rows="3" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" aria-label="Description of your hangout" style="width: 100%; margin: 0.4em 0; padding: 0.6em; border-radius: 5px; border: 1px solid #ccc; resize: vertical;"></textarea>
+        <label for="user">Description/Location:</label><textarea id="note"name="popup_note" placeholder="e.g. Coffee at Pan Pan in Greenpoint" rows="3" autocomplete="off" autocorrect="on" spellcheck="true" autocapitalize="sentences" aria-label="Description of your hangout" style="width: 100%; margin: 0.4em 0; padding: 0.6em; border-radius: 5px; border: 1px solid #ccc; resize: vertical;"></textarea>
         <label for="user">Duration:</label>
         <select name="duration" id="duration">
         <option value="1">1 hour</option>
@@ -65,128 +112,109 @@
         <input type="hidden" id="lat">
         <input type="hidden" id="lon">
         <button type="button" class="out" onclick="postBroadcast()">Create your listing</button>
-        <br>
         <p>To remove your listing early, click below:</p>
         <button type="button" class="done" onclick="deleteMyBroadcast()">I’m done!</button>
     </form>
   </div>
-  <hr>
-  <div id="install">
-        <h2 style="text-align: center;">Install the app</h2>
-        <h5>iPhone</h5>
-        <p>- Tap the <strong>Share icon</strong> (square with arrow).</p>
-        <p>- Select <strong>“Add to Home Screen.”</strong></p>
-        <p>- The app will appear on your home screen</p>
-        <h5>Android</h5>
-        <p>- Tap the <strong>three-dot menu → “Install app.”</strong></p>
-        <p>- The app will appear on your home screen</p>
-    </div>
 
-    <script>
+     <script>
     const api = "/broadcasts";
+    const spinner = document.getElementById("loading-indicator");
 
-    // ---------- POST BROADCAST ----------
-    async function postBroadcast() {
-        const btn = document.querySelector(".out");
-        btn.disabled = true;
-        const originalText = btn.textContent;
-        btn.textContent = "Posting...";
-
-        try {
-            const user = document.getElementById("user").value.trim();
-            const note = document.getElementById("note").value.trim();
-            const durationValue = document.getElementById("duration").value;
-            const duration_hours = durationValue === "unspecified" ? null : Number(durationValue);
-            const lat = document.getElementById("lat").value || null;
-            const lon = document.getElementById("lon").value || null;
-
-            if (!user || !note) {
-            alert("Enter your name and note first!");
-            return;
-            }
-
-            // Save username locally
-            localStorage.setItem("username", user);
-
-            // Optimistic render (show it immediately)
-            const list = document.getElementById("list");
-            const now = new Date();
-            const optimisticHtml = `<div class="broadcast optimistic">
-            <b>${user}</b> — ${note} (posting…)
-            </div>`;
-            list.insertAdjacentHTML("afterbegin", optimisticHtml);
-
-            const res = await fetch("/broadcasts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user, note, duration_hours, lat, lon })
-            });
-
-            if (!res.ok) {
-            throw new Error(`Server responded ${res.status}`);
-            }
-
-            const data = await res.json();
-            if (data.delete_token) {
-            localStorage.setItem("delete_token", data.delete_token);
-            }
-
-            // Clear form
-            document.getElementById("note").value = "";
-            document.getElementById("lat").value = "";
-            document.getElementById("lon").value = "";
-
-            // Reload broadcasts (in case optimistic differs)
-            await loadBroadcasts();
-
-        } catch (err) {
-            console.error("Broadcast failed:", err);
-            alert("Something went wrong creating your listing. Try again.");
-        } finally {
-            // Re-enable button
-            btn.disabled = false;
-            btn.textContent = originalText;
-        }
+    function setLoading(show) {
+      spinner.style.display = show ? "block" : "none";
     }
 
-    // ---------- DELETE BROADCAST ----------
-    async function deleteMyBroadcast() {
-      const token = localStorage.getItem("delete_token");
-      if (!token) return alert("No active broadcast found to delete.");
+    async function postBroadcast() {
+      const btn = document.querySelector(".out");
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "Posting...";
 
-      const res = await fetch("/delete_broadcast", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ delete_token: token })
-      });
+      try {
+        const user = document.getElementById("user").value.trim();
+        const note = document.getElementById("note").value.trim();
+        const durationValue = document.getElementById("duration").value;
+        const duration_hours = durationValue === "unspecified" ? null : Number(durationValue);
+        const lat = document.getElementById("lat").value || null;
+        const lon = document.getElementById("lon").value || null;
+        if (!user || !note) {
+          alert("Enter your name and description first!");
+          return;
+        }
 
-      if (res.ok) {
-        alert("Your broadcast has been cleared!");
-        localStorage.removeItem("delete_token");
-        loadBroadcasts();
-      } else {
-        alert("Could not delete broadcast — maybe it already expired?");
+        localStorage.setItem("username", user);
+
+        // Optimistic display
+        const list = document.getElementById("list");
+        const temp = document.createElement("div");
+        temp.className = "broadcast new";
+        temp.innerHTML = `<b>${user}</b> — ${note} (posting...)`;
+        list.prepend(temp);
+
+        const res = await fetch(api, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ user, note, duration_hours, lat, lon })
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        if (data.delete_token) localStorage.setItem("delete_token", data.delete_token);
+
+        document.getElementById("note").value = "";
+        document.getElementById("lat").value = "";
+        document.getElementById("lon").value = "";
+        await loadBroadcasts();
+      } catch (err) {
+        console.error("Broadcast error:", err);
+        alert("Could not post broadcast. Try again.");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
       }
     }
 
-    // ---------- LOCATION ----------
-    function getLocation() {
-        if (!navigator.geolocation) return alert("Geolocation not supported");
-        navigator.geolocation.getCurrentPosition(
-            pos => {
-            document.getElementById("lat").value = pos.coords.latitude;
-            document.getElementById("lon").value = pos.coords.longitude;
-            alert("Location attached for this post.");
-            },
-            err => {
-            console.error("Location error:", err);
-            alert("Could not get location (did you deny permission?)");
-            }
-        );
+    async function deleteMyBroadcast() {
+      const token = localStorage.getItem("delete_token");
+      if (!token) return alert("No active broadcast found.");
+      const btn = document.querySelector(".done");
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "Removing...";
+      try {
+        const res = await fetch("/delete_broadcast", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ delete_token: token })
+        });
+        if (res.ok) {
+          alert("Your broadcast has been cleared!");
+          localStorage.removeItem("delete_token");
+          loadBroadcasts();
+        } else {
+          alert("Could not delete broadcast. Maybe it already expired?");
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
     }
 
-    // ---------- LOAD BROADCASTS ----------
+    function getLocation() {
+      if (!navigator.geolocation) return alert("Geolocation not supported.");
+      navigator.geolocation.getCurrentPosition(pos => {
+        document.getElementById("lat").value = pos.coords.latitude;
+        document.getElementById("lon").value = pos.coords.longitude;
+        alert("Location attached for this post.");
+      }, err => {
+        console.error(err);
+        alert("Could not get location. Check permissions.");
+      });
+    }
+
     async function loadBroadcasts() {
+      setLoading(true);
       const res = await fetch(api);
       const data = await res.json();
       const list = document.getElementById("list");
@@ -198,120 +226,57 @@
         noListings.style.display = "block";
       } else {
         noListings.style.display = "none";
+        const now = new Date();
         data.forEach(b => {
+          const div = document.createElement("div");
+          div.className = "broadcast";
+
+          const expTime = new Date(b.expires_at);
+          const minsLeft = (expTime - now) / 60000;
+
           let line = `<b>${b.user}</b> — ${b.note}`;
           if (b.duration_hours === null) {
             line += ` (time unspecified)`;
           } else {
-            const end = new Date(b.expires_at)
-              .toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            line += ` (until ${end})`;
+            const end = expTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            if (minsLeft <= 30) {
+              line += ` (until ${end}, <em>expiring soon</em>)`;
+              div.classList.add("soon");
+            } else {
+              line += ` (until ${end})`;
+            }
           }
+
+          if (minsLeft <= 0) {
+            div.classList.add("expired");
+          }
+
           if (b.lat && b.lon) {
             const osm = `https://www.openstreetmap.org/?mlat=${b.lat}&mlon=${b.lon}#map=16/${b.lat}/${b.lon}`;
-            line += ` <a href="${osm}" target="_blank">📍View Map</a>`;
+            line += ` <a href="${osm}" target="_blank">📍Map</a>`;
           }
-          list.innerHTML += `<div class="broadcast">${line}</div>`;
+
+          div.innerHTML = line;
+          list.appendChild(div);
         });
       }
 
-      // Update friendly timestamp
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-      lastUpdated.textContent = `[Last updated: ${timeStr}]`;
+      const nowTime = new Date();
+      lastUpdated.textContent = `[Last updated: ${nowTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}]`;
+      setLoading(false);
     }
 
-  // Local notification smoke test (no server)
-    async function testLocalNotification() {
-        if (!("serviceWorker" in navigator)) return alert("No service worker support.");
-        const reg = await navigator.serviceWorker.getRegistration();
-        
-        if (!reg) return alert("Service worker not registered yet.");
-        if (Notification.permission !== "granted") {
-            const p = await Notification.requestPermission();
-            if (p !== "granted") return alert("Permission not granted.");
-        }
-        reg.showNotification("Local test", { body: "This proves SW + permission work." });
-    }
-    registerPush();
-  // Expose for quick manual test in console: testLocalNotification()
-  // window.testLocalNotification = testLocalNotification;
-    function urlBase64ToUint8Array(base64String) {
-        const padding = "=".repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding)
-        .replace(/-/g, "+").replace(/_/g, "/");
-        const rawData = atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
+    // ---------- SSE Live Updates ----------
+    if ("EventSource" in window) {
+      const evt = new EventSource("/stream");
+      evt.addEventListener("new_broadcast", e => loadBroadcasts());
+      evt.addEventListener("refresh", e => loadBroadcasts());
+    } else {
+      setInterval(loadBroadcasts, 60000);
     }
 
-    // ---------- INITIAL LOAD ----------
     document.getElementById("user").value = localStorage.getItem("username") || "";
     loadBroadcasts();
-    
-    // ---------- SSE LIVE UPDATES ----------
-    try {
-        if (!!window.EventSource) {
-            const evtSource = new EventSource("/stream");
-            evtSource.addEventListener("new_broadcast", e => {
-                loadBroadcasts();
-            });
-        }
-    } catch (err) {
-        console.error("SSE failed:", err);
-        setInterval(loadBroadcasts, 60000);
-    }
-
-
-    // ---------- SERVICE WORKER + PUSH ----------
-    async function registerPush() {
-        if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-            console.warn("Push not supported in this browser.");
-            return;
-        } try {
-            const reg = await navigator.serviceWorker.register("/service-worker.js");
-            console.log("Service Worker registered:", reg.scope);
-            
-            const keyRes = await fetch("/vapid_public_key");
-            const keyJson = await keyRes.json();
-            
-            if (!keyRes.ok || !keyJson.key) {
-                console.error("VAPID key not available:", keyJson);
-                return;
-            }
-
-            const vapidKey = urlBase64ToUint8Array(keyJson.key);
-            const permission = await Notification.requestPermission();
-            
-            if (permission !== "granted") {
-                console.warn("Notification permission:", permission);
-                return;
-            }
-            
-            const sub = await reg.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: vapidKey
-            });
-            
-            const resp = await fetch("/subscribe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(sub)
-            });
-            
-            if (!resp.ok) {
-                const msg = await resp.text();
-                console.error("Subscribe failed:", msg);
-            } else {
-                console.log("Subscribed to push notifications.");
-            }
-        } catch (err) {
-            console.error("Push registration error:", err);
-        }
-    }
-    </script>
+  </script>
 </body>
 </html>
