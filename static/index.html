@@ -168,14 +168,14 @@
     <script>
         // Generate a unique persistent device ID
     if (!localStorage.getItem("device_id")) {
-        localStorage.setItem("device_id", crypto.randomUUID());
+    localStorage.setItem("device_id", crypto.randomUUID());
     }
-    
     const device_id = localStorage.getItem("device_id");
     document.getElementById("popup-form").addEventListener("submit", e => e.preventDefault());
     
+    console.log("App script loaded."); // confirms your JS is running
+    
     const api = "/broadcasts";
-    const spinner = document.getElementById("loading-indicator");
     
     // Toast helper: lightweight inline confirmation messages
     function showToast(message, type = "info", duration = 3000) {
@@ -208,12 +208,14 @@
         if (type !== "info" && "vibrate" in navigator) navigator.vibrate(20);
     }
 
+    const spinner = document.getElementById("loading-indicator");
 
     function setLoading(show) {
         spinner.style.display = show ? "block" : "none";
     }
 
-    async function postBroadcast(event) {        
+    async function postBroadcast(event) {
+        if (event) event.preventDefault();
 
         const btn = document.querySelector(".out");
         btn.disabled = true;
@@ -313,9 +315,9 @@
 
         navigator.geolocation.getCurrentPosition(
             pos => {
-                document.getElementById("lat").value = pos.coords.latitude.toFixed(6);
-                document.getElementById("lon").value = pos.coords.longitude.toFixed(6);
-                showToast(`Location attached: (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
+            document.getElementById("lat").value = pos.coords.latitude.toFixed(6);
+            document.getElementById("lon").value = pos.coords.longitude.toFixed(6);
+            showToast(`Location attached: (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
             },
             err => {
             console.error("Location error:", err);
@@ -388,12 +390,11 @@
 
     // ---------- SSE Live Updates ----------
     if ("EventSource" in window) {
-        const evt = new EventSource("/stream");
-        evt.addEventListener("new_broadcast", e => loadBroadcasts());
-        evt.addEventListener("refresh", e => loadBroadcasts());
-        setInterval(loadBroadcasts, 120000);
+      const evt = new EventSource("/stream");
+      evt.addEventListener("new_broadcast", e => loadBroadcasts());
+      evt.addEventListener("refresh", e => loadBroadcasts());
     } else {
-        setInterval(loadBroadcasts, 120000);
+      setInterval(loadBroadcasts, 60000);
     }
 
     document.getElementById("user").value = localStorage.getItem("username") || "";

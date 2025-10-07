@@ -15,20 +15,53 @@ def get_db():
     return conn
 
 def init_db():
+    """Create or auto-upgrade the broadcasts table schema."""
     with get_db() as conn:
-        conn.executescript("""
-        CREATE TABLE IF NOT EXISTS broadcasts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user TEXT,
-            note TEXT,
-            lat REAL,
-            lon REAL,
-            expires_at TEXT,
-            delete_token TEXT,
-            duration_hours REAL
-        );
+        # Ensure table exists
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS broadcasts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user TEXT,
+                note TEXT,
+                lat REAL,
+                lon REAL,
+                expires_at TEXT,
+                delete_token TEXT,
+                duration_hours REAL,
+                device_id TEXT
+            );
         """)
+
+        # --- Auto-upgrade: check for missing columns ---
+        existing_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(broadcasts);").fetchall()
+        }
+
+        expected_cols = {
+            "id", "user", "note", "lat", "lon",
+            "expires_at", "delete_token", "duration_hours", "device_id"
+        }
+
+        missing = expected_cols - existing_cols
+        for col in missing:
+            if col == "device_id":
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN device_id TEXT;")
+            elif col == "duration_hours":
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN duration_hours REAL;")
+            elif col == "lat":
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN lat REAL;")
+            elif col == "lon":
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN lon REAL;")
+            elif col == "delete_token":
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN delete_token TEXT;")
+            elif col == "expires_at":
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN expires_at TEXT;")
+            elif col == "note":
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN note TEXT;")
+            elif col == "user":
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN user TEXT;")
         conn.commit()
+
 
 with app.app_context():
     init_db()
@@ -78,7 +111,7 @@ def create_broadcast():
             WHERE device_id = ? AND expires_at > ?
         """, (device_id, now)).fetchone()
         if existing:
-            conn.execute("DELETE FROM broadcasts WHERE id = ?", (existing["id"],))
+            return jsonify({"error": "You already have an active broadcast."}), 400
 
         duration = data.get("duration_hours")
         duration_hours = None if duration is None else float(duration)
@@ -95,15 +128,16 @@ def create_broadcast():
     publish_event("new_broadcast", {"user": user, "note": note, "expires_at": expires_at})
     return jsonify({"status": "ok", "delete_token": delete_token}), 201
 
+
 @app.route("/broadcasts", methods=["GET"])
 def list_broadcasts():
-    now_utc = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    now = datetime.now().isoformat()
     with get_db() as conn:
         rows = conn.execute("""
             SELECT * FROM broadcasts
             WHERE expires_at > ?
             ORDER BY expires_at
-        """, (now_utc,)).fetchall()
+        """, (now,)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.route("/delete_broadcast", methods=["POST"])
