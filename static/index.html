@@ -130,16 +130,16 @@
         <p><em>The best way to use this tool is in a web browser (e.g. Safari). If you think you'll end the broadcast/"pop-up" early, leave this website open as a tab and click the "I'm Done" button at the bottom when you want to end things.</em></p>
     </div>
     <hr>
-    <h2 style="text-align: center;">Current happenings</h2>
+    <h2 style="text-align: center;">Current pop-ups</h2>
     <div class="spinner" id="loading-indicator">Loading</div>
     <div id="list"></div>
-    <div id="no-listings" style="display:none;">There are no listings at the moment.</div>
+    <div id="no-listings" style="display:none;">There are no pop-ups at the moment.</div>
     <div id="last-updated"></div>
     <br>
     <hr>
 
     <div id="form">
-        <h2 style="text-align: center;">Create a listing</h2>
+        <h2 style="text-align: center;">Create a pop-up</h2>
         <form id="popup-form" autocomplete="off" novalidate>
             <label for="user">Name:</label><input id="user" name="user_name" placeholder="e.g. Phil Nguyen" autocomplete="name" inputmode="text" autocapitalize="words">
             <label for="note">Description/Location:</label><textarea id="note"name="popup_note" placeholder="e.g. Coffee at Pan Pan in Greenpoint" rows="3" autocomplete="off" autocorrect="on" spellcheck="true" autocapitalize="sentences" aria-label="Description of your hangout" style="width: 100%; margin: 0.4em 0; padding: 0.6em; border-radius: 5px; border: 1px solid #ccc; resize: vertical;"></textarea>
@@ -155,9 +155,9 @@
             <button type="button" onclick="getLocation()">📍 Share My Location (optional)</button>
             <input type="hidden" id="lat">
             <input type="hidden" id="lon">
-            <button type="button" class="out" onclick="postBroadcast(event)">Create your listing</button>
+            <button type="button" class="out" onclick="postBroadcast(event)">Create your pop-up</button>
             <p>To remove your listing early, click below:</p>
-            <button type="button" class="done" onclick="deleteMyBroadcast(event)">I’m done!</button>
+            <button type="button" class="done" onclick="deleteMyBroadcast(event)">Pop-up done!</button>
         </form>
     </div>
     <hr>
