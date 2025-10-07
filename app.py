@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, Response
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import sqlite3, json, queue, threading, time
 from secrets import token_hex
 import os
@@ -66,7 +66,10 @@ def create_broadcast():
     duration = data.get("duration_hours")
     duration_hours = None if duration is None else float(duration)
     hours = 12 if duration_hours is None else duration_hours
-    expires_at = (datetime.now() + timedelta(hours=hours)).isoformat()
+    
+    expires_at_dt = datetime.now(timezone.utc) + timedelta(hours=hours)
+    expires_at = expires_at_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+
     delete_token = token_hex(16)
 
     with get_db() as conn:
@@ -81,13 +84,13 @@ def create_broadcast():
 
 @app.route("/broadcasts", methods=["GET"])
 def list_broadcasts():
-    now = datetime.now().isoformat()  # was utcnow()
+    now_utc = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     with get_db() as conn:
         rows = conn.execute("""
             SELECT * FROM broadcasts
             WHERE expires_at > ?
             ORDER BY expires_at
-        """, (now,)).fetchall()
+        """, (now_utc,)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.route("/delete_broadcast", methods=["POST"])
@@ -114,13 +117,11 @@ def cleanup_expired_broadcasts(interval_hours=1):
     while True:
         time.sleep(interval_hours * 3600)
         try:
+            cutoff = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
             with get_db() as conn:
-                conn.execute(
-                    "DELETE FROM broadcasts WHERE expires_at < ?",
-                    (datetime.now().isoformat(),)  # was utcnow()
-                )
+                conn.execute("DELETE FROM broadcasts WHERE expires_at < ?", (cutoff,))
                 conn.commit()
-            print(f"[CLEANUP] Expired broadcasts removed at {datetime.now().isoformat()}")
+            print(f"[CLEANUP] Expired broadcasts removed at {cutoff}")
         except Exception as e:
             print("[CLEANUP ERROR]", e)
 
