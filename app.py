@@ -115,8 +115,8 @@ def create_broadcast():
 
         duration = data.get("duration_hours")
         duration_hours = None if duration is None else float(duration)
-        hours = 12 if duration_hours is None else duration_hours
-        expires_at = (datetime.now() + timedelta(hours=hours)).isoformat()
+        # hours = 12 if duration_hours is None else duration_hours
+        expires_at = (datetime.now().replace(microsecond=0)).isoformat()
         delete_token = token_hex(16)
 
         conn.execute("""
