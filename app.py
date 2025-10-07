@@ -191,6 +191,15 @@ def create_broadcast():
     delete_token = token_hex(16)
 
     with get_db() as conn:
+        existing = conn.execute("""
+        SELECT 1 FROM broadcasts
+        WHERE user = ? AND note = ? AND expires_at > datetime('now', '-10 minutes')
+                                """, (data["user"], data.get("note", ""))).fetchone()
+        
+        if existing:
+            return jsonify({"status": "duplicate_ignored"}), 200
+
+    with get_db() as conn:
         conn.execute("""
             INSERT INTO broadcasts (user, note, lat, lon, expires_at, delete_token, duration_hours)
             VALUES (?, ?, ?, ?, ?, ?, ?)

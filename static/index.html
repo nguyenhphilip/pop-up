@@ -26,6 +26,10 @@
         font-family: inherit;
         font-size: 1em;
     }
+    .optimistic {
+        opacity: 0.7;
+        font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -83,6 +87,11 @@
 
     // ---------- POST BROADCAST ----------
     async function postBroadcast() {
+        const btn = document.querySelector(".out");
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "Posting...";
+
         try {
             const user = document.getElementById("user").value.trim();
             const note = document.getElementById("note").value.trim();
@@ -91,8 +100,21 @@
             const lat = document.getElementById("lat").value || null;
             const lon = document.getElementById("lon").value || null;
 
-            if (!user || !note) return alert("Enter your name and note first!");
+            if (!user || !note) {
+            alert("Enter your name and note first!");
+            return;
+            }
+
+            // Save username locally
             localStorage.setItem("username", user);
+
+            // Optimistic render (show it immediately)
+            const list = document.getElementById("list");
+            const now = new Date();
+            const optimisticHtml = `<div class="broadcast optimistic">
+            <b>${user}</b> — ${note} (posting…)
+            </div>`;
+            list.insertAdjacentHTML("afterbegin", optimisticHtml);
 
             const res = await fetch("/broadcasts", {
             method: "POST",
@@ -100,17 +122,30 @@
             body: JSON.stringify({ user, note, duration_hours, lat, lon })
             });
 
-            if (!res.ok) throw new Error(await res.text());
-            const data = await res.json();
-            if (data.delete_token) localStorage.setItem("delete_token", data.delete_token);
+            if (!res.ok) {
+            throw new Error(`Server responded ${res.status}`);
+            }
 
+            const data = await res.json();
+            if (data.delete_token) {
+            localStorage.setItem("delete_token", data.delete_token);
+            }
+
+            // Clear form
             document.getElementById("note").value = "";
             document.getElementById("lat").value = "";
             document.getElementById("lon").value = "";
-            loadBroadcasts();
+
+            // Reload broadcasts (in case optimistic differs)
+            await loadBroadcasts();
+
         } catch (err) {
             console.error("Broadcast failed:", err);
-            alert("Could not create listing. Check console for details.");
+            alert("Something went wrong creating your listing. Try again.");
+        } finally {
+            // Re-enable button
+            btn.disabled = false;
+            btn.textContent = originalText;
         }
     }
 
