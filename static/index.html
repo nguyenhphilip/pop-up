@@ -78,7 +78,7 @@
         <p>- The app will appear on your home screen</p>
     </div>
 
-  <script>
+    <script>
     const api = "/broadcasts";
 
     // ---------- POST BROADCAST ----------
@@ -176,43 +176,96 @@
     // ---------- INITIAL LOAD ----------
     document.getElementById("user").value = localStorage.getItem("username") || "";
     loadBroadcasts();
+    
+    // ---------- SSE LIVE UPDATES ----------
+    if (!!window.EventSource) {
+    const evtSource = new EventSource("/stream");
+    evtSource.addEventListener("new_broadcast", event => {
+        console.log("New broadcast event:", event.data);
+        // Reload broadcasts list instantly
+        loadBroadcasts();
+    });
+    evtSource.onerror = e => console.error("SSE error:", e);
+    } else {
+    // Fallback to periodic polling if SSE unsupported
+    console.warn("SSE not supported — using polling fallback");
     setInterval(loadBroadcasts, 60000);
+    }
+
 
     // ---------- SERVICE WORKER + PUSH ----------
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/service-worker.js").then(async reg => {
-        console.log("Service Worker registered.");
-        const res = await fetch("/vapid_public_key");
-        const data = await res.json();
-        const vapidKey = urlBase64ToUint8Array(data.key);
+    async function registerPush() {
+        if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+            console.warn("Push not supported in this browser.");
+            return;
+        } try {
+            const reg = await navigator.serviceWorker.register("/service-worker.js");
+            console.log("Service Worker registered:", reg.scope);
+            
+            const keyRes = await fetch("/vapid_public_key");
+            const keyJson = await keyRes.json();
+            
+            if (!keyRes.ok || !keyJson.key) {
+                console.error("VAPID key not available:", keyJson);
+                return;
+            }
 
-        const permission = await Notification.requestPermission();
-        if (permission === "granted") {
-          const sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: vapidKey
-          });
-          await fetch("/subscribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(sub)
-          });
-          console.log("Subscribed to push notifications.");
+            const vapidKey = urlBase64ToUint8Array(keyJson.key);
+            const permission = await Notification.requestPermission();
+            
+            if (permission !== "granted") {
+                console.warn("Notification permission:", permission);
+                return;
+            }
+            
+            const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: vapidKey
+            });
+            
+            const resp = await fetch("/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(sub)
+            });
+            
+            if (!resp.ok) {
+                const msg = await resp.text();
+                console.error("Subscribe failed:", msg);
+            } else {
+                console.log("Subscribed to push notifications.");
+            }
+        } catch (err) {
+            console.error("Push registration error:", err);
         }
-      });
     }
 
-    function urlBase64ToUint8Array(base64String) {
-      const padding = "=".repeat((4 - base64String.length % 4) % 4);
-      const base64 = (base64String + padding)
-        .replace(/-/g, "+").replace(/_/g, "/");
-      const rawData = atob(base64);
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-      }
-      return outputArray;
+  // Local notification smoke test (no server)
+    async function testLocalNotification() {
+        if (!("serviceWorker" in navigator)) return alert("No service worker support.");
+        const reg = await navigator.serviceWorker.getRegistration();
+        
+        if (!reg) return alert("Service worker not registered yet.");
+        if (Notification.permission !== "granted") {
+            const p = await Notification.requestPermission();
+            if (p !== "granted") return alert("Permission not granted.");
+        }
+        reg.showNotification("Local test", { body: "This proves SW + permission work." });
     }
-  </script>
+    registerPush();
+  // Expose for quick manual test in console: testLocalNotification()
+  // window.testLocalNotification = testLocalNotification;
+    function urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding)
+        .replace(/-/g, "+").replace(/_/g, "/");
+        const rawData = atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+    </script>
 </body>
 </html>

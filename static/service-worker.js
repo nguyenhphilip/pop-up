@@ -11,6 +11,11 @@ self.addEventListener("install", event => {
       ])
     )
   );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", event => {
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener("fetch", event => {
@@ -21,13 +26,24 @@ self.addEventListener("fetch", event => {
 
 // ----- Handle push notifications -----
 self.addEventListener("push", event => {
-  const data = event.data ? event.data.json() : {};
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    // Defensive: some backends send text
+    data = { title: "Who’s Out", body: event.data && event.data.text() };
+  }
+
   const title = data.title || "Who’s Out";
   const options = {
     body: data.body || "",
     icon: "/icon-192.png",
-    badge: "/icon-192.png"
+    badge: "/icon-192.png",
+    // Avoid notification collapsing on Android
+    tag: String(Date.now()),
+    renotify: false
   };
+
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
