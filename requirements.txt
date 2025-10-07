@@ -2,3 +2,4 @@ Flask
 pywebpush
 cryptography
 python-dotenv
+gunicorn
