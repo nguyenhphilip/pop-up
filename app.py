@@ -2,8 +2,7 @@ from flask import Flask, request, jsonify, Response
 from datetime import datetime, timedelta, timezone
 import sqlite3, json, queue, threading, time
 from secrets import token_hex
-import os
-import sys
+import os, sys
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 DB_PATH = os.getenv("DB_PATH", "broadcasts.db")
@@ -17,7 +16,6 @@ def get_db():
 def init_db():
     """Create or auto-upgrade the broadcasts table schema."""
     with get_db() as conn:
-        # Ensure table exists
         conn.execute("""
             CREATE TABLE IF NOT EXISTS broadcasts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,17 +29,11 @@ def init_db():
                 device_id TEXT
             );
         """)
-
-        # --- Auto-upgrade: check for missing columns ---
-        existing_cols = {
-            row[1] for row in conn.execute("PRAGMA table_info(broadcasts);").fetchall()
-        }
-
+        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(broadcasts);").fetchall()}
         expected_cols = {
             "id", "user", "note", "lat", "lon",
             "expires_at", "delete_token", "duration_hours", "device_id"
         }
-
         missing = expected_cols - existing_cols
         for col in missing:
             if col == "device_id":
@@ -61,7 +53,6 @@ def init_db():
             elif col == "user":
                 conn.execute("ALTER TABLE broadcasts ADD COLUMN user TEXT;")
         conn.commit()
-
 
 with app.app_context():
     init_db()
@@ -84,11 +75,9 @@ def stream():
                 sys.stdout.flush()
         except GeneratorExit:
             pass
-
     q = queue.Queue()
     listeners.append(q)
     return Response(event_stream(q), mimetype="text/event-stream")
-
 
 # ---------- ROUTES ----------
 @app.route("/broadcasts", methods=["POST"])
@@ -103,8 +92,8 @@ def create_broadcast():
     if not device_id:
         return jsonify({"error": "Missing device ID"}), 400
 
-    # Check if this device already has an active broadcast
-    now = datetime.now().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
+
     with get_db() as conn:
         existing = conn.execute("""
             SELECT id FROM broadcasts
@@ -115,8 +104,8 @@ def create_broadcast():
 
         duration = data.get("duration_hours")
         duration_hours = None if duration is None else float(duration)
-        # hours = 12 if duration_hours is None else duration_hours
-        expires_at = (datetime.now().replace(microsecond=0)).isoformat()
+        hours = 12 if duration_hours is None else duration_hours
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
         delete_token = token_hex(16)
 
         conn.execute("""
@@ -131,7 +120,7 @@ def create_broadcast():
 
 @app.route("/broadcasts", methods=["GET"])
 def list_broadcasts():
-    now = datetime.now().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     with get_db() as conn:
         rows = conn.execute("""
             SELECT * FROM broadcasts
@@ -139,6 +128,7 @@ def list_broadcasts():
             ORDER BY expires_at
         """, (now,)).fetchall()
     return jsonify([dict(r) for r in rows])
+
 
 @app.route("/delete_broadcast", methods=["POST"])
 def delete_broadcast():
@@ -155,6 +145,7 @@ def delete_broadcast():
     publish_event("refresh", {"action": "deleted"})
     return jsonify({"status": "deleted"})
 
+
 @app.route("/")
 def serve_index():
     return app.send_static_file("index.html")
@@ -164,13 +155,15 @@ def cleanup_expired_broadcasts(interval_hours=1):
     while True:
         try:
             with get_db() as conn:
-                conn.execute("DELETE FROM broadcasts WHERE expires_at < ?", (datetime.now().isoformat(),))
+                conn.execute(
+                    "DELETE FROM broadcasts WHERE expires_at < ?",
+                    (datetime.now(timezone.utc).isoformat(),)
+                )
                 conn.commit()
         except Exception as e:
             print("[CLEANUP ERROR]", e)
         time.sleep(interval_hours * 3600)
 
-# Start background cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_expired_broadcasts, daemon=True)
 cleanup_thread.start()
 

@@ -333,57 +333,78 @@
     }
 
     async function loadBroadcasts() {
-      setLoading(true);
-      const res = await fetch(api);
-      const data = await res.json();
-      const list = document.getElementById("list");
-      const noListings = document.getElementById("no-listings");
-      const lastUpdated = document.getElementById("last-updated");
-      list.innerHTML = "";
+        setLoading(true);
 
-      if (data.length === 0) {
-        noListings.style.display = "block";
-      } else {
-        noListings.style.display = "none";
-        const now = new Date();
-        data.forEach(b => {
-          const div = document.createElement("div");
-          div.className = "broadcast";
+        try {
+            const res = await fetch(api);
+            if (!res.ok) throw new Error("Failed to fetch broadcasts");
 
-          const expTime = new Date(b.expires_at);
-          const minsLeft = (expTime - now) / 60000;
+            const data = await res.json();
+            const list = document.getElementById("list");
+            const noListings = document.getElementById("no-listings");
+            const lastUpdated = document.getElementById("last-updated");
 
-          let line = `<b>${b.user}</b> — ${b.note}`;
-          if (b.duration_hours === null) {
-            line += ` (time unspecified)`;
-          } else {
-            const end = expTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-            if (minsLeft <= 30) {
-              line += ` (until ${end}, <em>expiring soon</em>)`;
-              div.classList.add("soon");
+            list.innerHTML = "";
+
+            if (data.length === 0) {
+            noListings.style.display = "block";
             } else {
-              line += ` (until ${end})`;
+            noListings.style.display = "none";
+
+            const now = new Date(); // local time now
+            data.forEach(b => {
+                const div = document.createElement("div");
+                div.className = "broadcast";
+
+                // Parse UTC timestamp (e.g., "2025-10-07T18:13:00+00:00")
+                const expTime = new Date(b.expires_at); // JS auto-converts to local time
+                const minsLeft = (expTime - now) / 60000;
+
+                // Format expiration time in user’s local zone
+                const end = expTime.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+                });
+
+                // Build listing display
+                let line = `<b>${b.user}</b> — ${b.note}`;
+                if (b.duration_hours === null) {
+                line += ` (time unspecified)`;
+                } else if (minsLeft <= 0) {
+                line += ` (expired at ${end})`;
+                div.classList.add("expired");
+                } else if (minsLeft <= 30) {
+                line += ` (until ${end}, <em>expiring soon</em>)`;
+                div.classList.add("soon");
+                } else {
+                line += ` (until ${end})`;
+                }
+
+                // Optional map link
+                if (b.lat && b.lon) {
+                const osm = `https://www.openstreetmap.org/?mlat=${b.lat}&mlon=${b.lon}#map=16/${b.lat}/${b.lon}`;
+                line += ` <a href="${osm}" target="_blank">📍Map</a>`;
+                }
+
+                div.innerHTML = line;
+                list.appendChild(div);
+            });
             }
-          }
 
-          if (minsLeft <= 0) {
-            div.classList.add("expired");
-          }
-
-          if (b.lat && b.lon) {
-            const osm = `https://www.openstreetmap.org/?mlat=${b.lat}&mlon=${b.lon}#map=16/${b.lat}/${b.lon}`;
-            line += ` <a href="${osm}" target="_blank">📍Map</a>`;
-          }
-
-          div.innerHTML = line;
-          list.appendChild(div);
-        });
-      }
-
-      const nowTime = new Date();
-      lastUpdated.textContent = `[Last updated: ${nowTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}]`;
-      setLoading(false);
+            const nowTime = new Date();
+            lastUpdated.textContent = `[Last updated: ${nowTime.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+            })}]`;
+        } catch (err) {
+            console.error("Error loading broadcasts:", err);
+            showToast("Error loading broadcasts.", "error");
+        } finally {
+            setLoading(false);
+        }
     }
+
 
     // ---------- SSE Live Updates ----------
     if ("EventSource" in window) {
