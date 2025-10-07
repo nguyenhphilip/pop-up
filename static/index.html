@@ -83,28 +83,35 @@
 
     // ---------- POST BROADCAST ----------
     async function postBroadcast() {
-      const user = document.getElementById("user").value.trim();
-      const note = document.getElementById("note").value.trim();
-      const durationValue = document.getElementById("duration").value;
-      const duration_hours = durationValue === "unspecified" ? null : Number(durationValue);
-      const lat = document.getElementById("lat").value || null;
-      const lon = document.getElementById("lon").value || null;
-      if (!user || !note) return alert("Enter your name and note first!");
-      localStorage.setItem("username", user);
+        try {
+            const user = document.getElementById("user").value.trim();
+            const note = document.getElementById("note").value.trim();
+            const durationValue = document.getElementById("duration").value;
+            const duration_hours = durationValue === "unspecified" ? null : Number(durationValue);
+            const lat = document.getElementById("lat").value || null;
+            const lon = document.getElementById("lon").value || null;
 
-      const res = await fetch(api, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ user, note, duration_hours, lat, lon })
-      });
-      const data = await res.json();
+            if (!user || !note) return alert("Enter your name and note first!");
+            localStorage.setItem("username", user);
 
-      if (data.delete_token) localStorage.setItem("delete_token", data.delete_token);
+            const res = await fetch("/broadcasts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user, note, duration_hours, lat, lon })
+            });
 
-      document.getElementById("note").value = "";
-      document.getElementById("lat").value = "";
-      document.getElementById("lon").value = "";
-      loadBroadcasts();
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            if (data.delete_token) localStorage.setItem("delete_token", data.delete_token);
+
+            document.getElementById("note").value = "";
+            document.getElementById("lat").value = "";
+            document.getElementById("lon").value = "";
+            loadBroadcasts();
+        } catch (err) {
+            console.error("Broadcast failed:", err);
+            alert("Could not create listing. Check console for details.");
+        }
     }
 
     // ---------- DELETE BROADCAST ----------
@@ -129,12 +136,18 @@
 
     // ---------- LOCATION ----------
     function getLocation() {
-      if (!navigator.geolocation) return alert("Geolocation not supported");
-      navigator.geolocation.getCurrentPosition(pos => {
-        document.getElementById("lat").value = pos.coords.latitude;
-        document.getElementById("lon").value = pos.coords.longitude;
-        alert("Location attached for this post.");
-      }, err => alert("Could not get location"));
+        if (!navigator.geolocation) return alert("Geolocation not supported");
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+            document.getElementById("lat").value = pos.coords.latitude;
+            document.getElementById("lon").value = pos.coords.longitude;
+            alert("Location attached for this post.");
+            },
+            err => {
+            console.error("Location error:", err);
+            alert("Could not get location (did you deny permission?)");
+            }
+        );
     }
 
     // ---------- LOAD BROADCASTS ----------
@@ -173,23 +186,48 @@
       lastUpdated.textContent = `[Last updated: ${timeStr}]`;
     }
 
+  // Local notification smoke test (no server)
+    async function testLocalNotification() {
+        if (!("serviceWorker" in navigator)) return alert("No service worker support.");
+        const reg = await navigator.serviceWorker.getRegistration();
+        
+        if (!reg) return alert("Service worker not registered yet.");
+        if (Notification.permission !== "granted") {
+            const p = await Notification.requestPermission();
+            if (p !== "granted") return alert("Permission not granted.");
+        }
+        reg.showNotification("Local test", { body: "This proves SW + permission work." });
+    }
+    registerPush();
+  // Expose for quick manual test in console: testLocalNotification()
+  // window.testLocalNotification = testLocalNotification;
+    function urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding)
+        .replace(/-/g, "+").replace(/_/g, "/");
+        const rawData = atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+
     // ---------- INITIAL LOAD ----------
     document.getElementById("user").value = localStorage.getItem("username") || "";
     loadBroadcasts();
     
     // ---------- SSE LIVE UPDATES ----------
-    if (!!window.EventSource) {
-    const evtSource = new EventSource("/stream");
-    evtSource.addEventListener("new_broadcast", event => {
-        console.log("New broadcast event:", event.data);
-        // Reload broadcasts list instantly
-        loadBroadcasts();
-    });
-    evtSource.onerror = e => console.error("SSE error:", e);
-    } else {
-    // Fallback to periodic polling if SSE unsupported
-    console.warn("SSE not supported — using polling fallback");
-    setInterval(loadBroadcasts, 60000);
+    try {
+        if (!!window.EventSource) {
+            const evtSource = new EventSource("/stream");
+            evtSource.addEventListener("new_broadcast", e => {
+                loadBroadcasts();
+            });
+        }
+    } catch (err) {
+        console.error("SSE failed:", err);
+        setInterval(loadBroadcasts, 60000);
     }
 
 
@@ -238,33 +276,6 @@
         } catch (err) {
             console.error("Push registration error:", err);
         }
-    }
-
-  // Local notification smoke test (no server)
-    async function testLocalNotification() {
-        if (!("serviceWorker" in navigator)) return alert("No service worker support.");
-        const reg = await navigator.serviceWorker.getRegistration();
-        
-        if (!reg) return alert("Service worker not registered yet.");
-        if (Notification.permission !== "granted") {
-            const p = await Notification.requestPermission();
-            if (p !== "granted") return alert("Permission not granted.");
-        }
-        reg.showNotification("Local test", { body: "This proves SW + permission work." });
-    }
-    registerPush();
-  // Expose for quick manual test in console: testLocalNotification()
-  // window.testLocalNotification = testLocalNotification;
-    function urlBase64ToUint8Array(base64String) {
-        const padding = "=".repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding)
-        .replace(/-/g, "+").replace(/_/g, "/");
-        const rawData = atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
     }
     </script>
 </body>
