@@ -22,6 +22,10 @@
     a { color: #2a5db0; text-decoration: none; }
     #no-listings { text-align: center; color: #888; font-style: italic; margin-top: 1em; }
     #last-updated { text-align: center; color: #777; font-size: 0.9em; margin-top: 0.5em; }
+    textarea {
+        font-family: inherit;
+        font-size: 1em;
+    }
   </style>
 </head>
 <body>
@@ -43,7 +47,7 @@
     <form id="popup-form" autocomplete="off" novalidate>
         <input type="text" style="display:none" autocomplete="false">
         <label for="user">Name:</label><input name="user_name" id="user" placeholder="e.g. Phil Nguyen" autocomplete="name" inputmode="text" name="note" autocapitalize="words">
-        <label for="user">Description/Location:</label><input name="popup_note" id="note" placeholder="e.g. Coffee and chill at Pan Pan in Greenpoint" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="text" autocapitalize="sentences" aria-label="Description of your hangout">
+        <label for="user">Description/Location:</label><textarea id="note"name="popup_note" placeholder="e.g. Coffee at Pan Pan in Greenpoint" rows="3" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" aria-label="Description of your hangout" style="width: 100%; margin: 0.4em 0; padding: 0.6em; border-radius: 5px; border: 1px solid #ccc; resize: vertical;"></textarea>
         <label for="user">Duration:</label>
         <select name="duration" id="duration">
         <option value="1">1 hour</option>
