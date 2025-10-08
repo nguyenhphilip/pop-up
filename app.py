@@ -1,172 +1,210 @@
 from flask import Flask, request, jsonify, Response
-from datetime import datetime, timedelta, timezone
-import sqlite3, json, queue, threading, time
-from secrets import token_hex
-import os, sys
+from datetime import UTC
+from datetime import datetime, timedelta
+from threading import Lock
+from twilio.rest import Client
+import os
+import json
+import time
+import uuid
+from dotenv import load_dotenv
 
-app = Flask(__name__, static_folder="static", static_url_path="")
-DB_PATH = os.getenv("DB_PATH", "broadcasts.db")
+load_dotenv()
 
-# ---------- DATABASE ----------
-def get_db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=1)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    """Create or auto-upgrade the broadcasts table schema."""
-    with get_db() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS broadcasts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user TEXT,
-                note TEXT,
-                lat REAL,
-                lon REAL,
-                expires_at TEXT,
-                delete_token TEXT,
-                duration_hours REAL,
-                device_id TEXT
-            );
-        """)
-        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(broadcasts);").fetchall()}
-        expected_cols = {
-            "id", "user", "note", "lat", "lon",
-            "expires_at", "delete_token", "duration_hours", "device_id"
-        }
-        missing = expected_cols - existing_cols
-        for col in missing:
-            if col == "device_id":
-                conn.execute("ALTER TABLE broadcasts ADD COLUMN device_id TEXT;")
-            elif col == "duration_hours":
-                conn.execute("ALTER TABLE broadcasts ADD COLUMN duration_hours REAL;")
-            elif col == "lat":
-                conn.execute("ALTER TABLE broadcasts ADD COLUMN lat REAL;")
-            elif col == "lon":
-                conn.execute("ALTER TABLE broadcasts ADD COLUMN lon REAL;")
-            elif col == "delete_token":
-                conn.execute("ALTER TABLE broadcasts ADD COLUMN delete_token TEXT;")
-            elif col == "expires_at":
-                conn.execute("ALTER TABLE broadcasts ADD COLUMN expires_at TEXT;")
-            elif col == "note":
-                conn.execute("ALTER TABLE broadcasts ADD COLUMN note TEXT;")
-            elif col == "user":
-                conn.execute("ALTER TABLE broadcasts ADD COLUMN user TEXT;")
-        conn.commit()
-
-with app.app_context():
-    init_db()
-
-# ---------- SSE CHANNEL ----------
-listeners = []
-
-def publish_event(event: str, data: dict):
-    msg = f"event: {event}\ndata: {json.dumps(data)}\n\n"
-    for q in listeners:
-        q.put(msg)
-
-@app.route("/stream")
-def stream():
-    def event_stream(q):
-        try:
-            while True:
-                msg = q.get()
-                yield msg
-                sys.stdout.flush()
-        except GeneratorExit:
-            pass
-    q = queue.Queue()
-    listeners.append(q)
-    return Response(event_stream(q), mimetype="text/event-stream")
-
-# ---------- ROUTES ----------
-@app.route("/broadcasts", methods=["POST"])
-def create_broadcast():
-    data = request.get_json(silent=True) or {}
-    user = (data.get("user") or "").strip()
-    note = (data.get("note") or "").strip()
-    device_id = (data.get("device_id") or "").strip()
-
-    if not user or not note:
-        return jsonify({"error": "Missing user or note"}), 400
-    if not device_id:
-        return jsonify({"error": "Missing device ID"}), 400
-
-    now = datetime.now(timezone.utc).isoformat()
-
-    with get_db() as conn:
-        existing = conn.execute("""
-            SELECT id FROM broadcasts
-            WHERE device_id = ? AND expires_at > ?
-        """, (device_id, now)).fetchone()
-        if existing:
-            return jsonify({"error": "You already have an active broadcast."}), 400
-
-        duration = data.get("duration_hours")
-        duration_hours = None if duration is None else float(duration)
-        hours = 12 if duration_hours is None else duration_hours
-        expires_at = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
-        delete_token = token_hex(16)
-
-        conn.execute("""
-            INSERT INTO broadcasts (user, note, lat, lon, expires_at, delete_token, duration_hours, device_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (user, note, data.get("lat"), data.get("lon"), expires_at, delete_token, duration_hours, device_id))
-        conn.commit()
-
-    publish_event("new_broadcast", {"user": user, "note": note, "expires_at": expires_at})
-    return jsonify({"status": "ok", "delete_token": delete_token}), 201
+TWILIO_SID = os.getenv("TWILIO_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_FROM = os.getenv("TWILIO_FROM")
 
 
-@app.route("/broadcasts", methods=["GET"])
-def list_broadcasts():
-    now = datetime.now(timezone.utc).isoformat()
-    with get_db() as conn:
-        rows = conn.execute("""
-            SELECT * FROM broadcasts
-            WHERE expires_at > ?
-            ORDER BY expires_at
-        """, (now,)).fetchall()
-    return jsonify([dict(r) for r in rows])
-
-
-@app.route("/delete_broadcast", methods=["POST"])
-def delete_broadcast():
-    token = (request.get_json(silent=True) or {}).get("delete_token")
-    if not token:
-        return jsonify({"error": "Missing delete_token"}), 400
-
-    with get_db() as conn:
-        cur = conn.execute("DELETE FROM broadcasts WHERE delete_token = ?", (token,))
-        conn.commit()
-        if cur.rowcount == 0:
-            return jsonify({"error": "Invalid or expired token"}), 404
-
-    publish_event("refresh", {"action": "deleted"})
-    return jsonify({"status": "deleted"})
-
+app = Flask(__name__)
 
 @app.route("/")
 def serve_index():
     return app.send_static_file("index.html")
 
-# ---------- AUTO-CLEANUP JOB ----------
-def cleanup_expired_broadcasts(interval_hours=1):
-    while True:
+# ----------------------------
+# TWILIO SETUP
+# ----------------------------
+TWILIO_SID = os.getenv("TWILIO_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_FROM = os.getenv("TWILIO_FROM")
+
+if TWILIO_SID and TWILIO_AUTH_TOKEN and TWILIO_FROM:
+    twilio_client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
+else:
+    twilio_client = None
+    print("⚠️ Twilio not configured — SMS disabled.")
+
+# ----------------------------
+# GLOBAL STORAGE (in-memory)
+# ----------------------------
+broadcasts = []
+subscribers = set()
+listeners = []
+lock = Lock()
+
+
+# ----------------------------
+# UTILITIES
+# ----------------------------
+def send_sms_to_all(message: str):
+    if not twilio_client:
+        print("SMS skipped (Twilio not configured).")
+        return
+
+    for phone in list(subscribers):
         try:
-            with get_db() as conn:
-                conn.execute(
-                    "DELETE FROM broadcasts WHERE expires_at < ?",
-                    (datetime.now(timezone.utc).isoformat(),)
-                )
-                conn.commit()
+            twilio_client.messages.create(to=phone, from_=TWILIO_FROM, body=message)
+            print(f"✅ Sent SMS to {phone}")
         except Exception as e:
-            print("[CLEANUP ERROR]", e)
-        time.sleep(interval_hours * 3600)
+            print(f"❌ Failed to send to {phone}: {e}")
 
-cleanup_thread = threading.Thread(target=cleanup_expired_broadcasts, daemon=True)
-cleanup_thread.start()
 
+def broadcast_event(event_name: str):
+    """Push an SSE update to all connected browsers."""
+    with lock:
+        dead = []
+        for q in listeners:
+            try:
+                q.put(event_name)
+            except Exception:
+                dead.append(q)
+        for d in dead:
+            listeners.remove(d)
+
+
+# ----------------------------
+# ROUTES
+# ----------------------------
+
+@app.route("/broadcasts", methods=["GET"])
+def get_broadcasts():
+    now = datetime.now(UTC)
+    valid = [b for b in broadcasts if b["expires_at"] > now]
+    return jsonify(valid)
+
+
+@app.route("/broadcasts", methods=["POST"])
+def post_broadcast():
+    data = request.get_json()
+    user = data.get("user")
+    note = data.get("note")
+    duration_hours = data.get("duration_hours")
+    lat = data.get("lat")
+    lon = data.get("lon")
+    device_id = data.get("device_id")
+
+    if not user or not note:
+        return jsonify({"error": "Missing name or description."}), 400
+
+    # Each device can only have one active broadcast
+    existing = next((b for b in broadcasts if b.get("device_id") == device_id), None)
+    if existing:
+        return jsonify({"error": "You already have an active broadcast."}), 400
+
+    hours = duration_hours if duration_hours else 12
+    expires_at = datetime.now(UTC) + timedelta(hours=hours)
+    delete_token = str(uuid.uuid4())
+
+    broadcast = {
+        "id": str(uuid.uuid4()),
+        "user": user,
+        "note": note,
+        "lat": lat,
+        "lon": lon,
+        "duration_hours": duration_hours,
+        "expires_at": expires_at,
+        "device_id": device_id,
+        "delete_token": delete_token,
+    }
+
+    broadcasts.append(broadcast)
+
+    # Send SMS to all subscribers
+    msg = f"📣 New pop-up from {user}: {note}"
+    send_sms_to_all(msg)
+
+    # Notify connected browsers via SSE
+    broadcast_event("new_broadcast")
+
+    return jsonify({"delete_token": delete_token, "expires_at": expires_at.isoformat()})
+
+
+@app.route("/delete_broadcast", methods=["POST"])
+def delete_broadcast():
+    data = request.get_json()
+    token = data.get("delete_token")
+    if not token:
+        return jsonify({"error": "Missing token"}), 400
+
+    removed = False
+    for b in list(broadcasts):
+        if b["delete_token"] == token:
+            broadcasts.remove(b)
+            removed = True
+            break
+
+    if removed:
+        broadcast_event("refresh")
+        return jsonify({"message": "Broadcast removed."})
+    else:
+        return jsonify({"error": "Broadcast not found."}), 404
+
+
+# ----------------------------
+# SMS SUBSCRIPTION ROUTES
+# ----------------------------
+@app.route("/subscribe", methods=["POST"])
+def subscribe():
+    data = request.get_json()
+    phone = data.get("phone")
+    if not phone:
+        return jsonify({"error": "Phone number required"}), 400
+    subscribers.add(phone)
+    return jsonify({"message": f"Subscribed {phone} for text alerts."})
+
+
+@app.route("/unsubscribe", methods=["POST"])
+def unsubscribe():
+    data = request.get_json()
+    phone = data.get("phone")
+    if not phone:
+        return jsonify({"error": "Phone number required"}), 400
+    subscribers.discard(phone)
+    return jsonify({"message": f"Unsubscribed {phone}."})
+
+
+# ----------------------------
+# SSE STREAM
+# ----------------------------
+@app.route("/stream")
+def stream():
+    def event_stream(q):
+        while True:
+            event = q.get()
+            yield f"event: {event}\ndata: update\n\n"
+
+    import queue
+    q = queue.Queue()
+    with lock:
+        listeners.append(q)
+    return Response(event_stream(q), mimetype="text/event-stream")
+
+
+# ----------------------------
+# AUTO CLEANUP TASK
+# ----------------------------
+@app.before_request
+def cleanup():
+    now = datetime.now(UTC)
+    before = len(broadcasts)
+    broadcasts[:] = [b for b in broadcasts if b["expires_at"] > now]
+    if len(broadcasts) != before:
+        broadcast_event("refresh")
+
+
+# ----------------------------
+# ENTRY POINT
+# ----------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, threaded=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)

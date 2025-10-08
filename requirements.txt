@@ -4,3 +4,4 @@ cryptography
 python-dotenv
 gevent>=24.0.0
 gunicorn>=21.2.0
+twilio

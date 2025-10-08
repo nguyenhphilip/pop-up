@@ -121,6 +121,7 @@
     .toast.info { background: #555; }
     </style>
 </head>
+
 <body>
     <div id="toast-container"></div>
     <h1>POP-UP HANG</h1>
@@ -160,10 +161,6 @@
             <button type="button" class="done" onclick="deleteMyBroadcast(event)">Pop-up done!</button>
         </form>
     </div>
-    <hr>
-    <footer style="text-align: center;">
-        <p><em>Created by <a href="https://philintheblank.me">Phil.</a></em></p>
-    </footer>
 
     <script>
         // Generate a unique persistent device ID
@@ -418,5 +415,66 @@
     document.getElementById("user").value = localStorage.getItem("username") || "";
     loadBroadcasts();
     </script>
+
+  <hr>
+  <h2 style="text-align: center;">Get Text Alerts</h2>
+  <p style="text-align: center;">Enter your phone number to get a text whenever a new pop-up appears.</p>
+
+  <form id="sms-form" onsubmit="subscribe(event)" style="text-align:center;">
+    <input id="phone" placeholder="Enter phone number (e.g. +15551234567)" inputmode="tel"
+          style="width: 80%; margin-bottom: 0.5em;">
+    <br>
+    <button type="submit">Subscribe</button>
+  </form>
+
+  <div style="text-align:center; margin-top:0.5em;">
+    <button onclick="unsubscribe()">Unsubscribe</button>
+  </div>
+  <p style="font-size: 0.9em; text-align:center; color:#555; max-width: 400px; margin: 0 auto;">
+  By entering your phone number and clicking "Subscribe," you agree to receive occasional
+  SMS notifications about new community pop-up hangouts. Message frequency varies.
+  You can unsubscribe at any time by clicking "Unsubscribe."
+</p>
+  <hr>
+  <footer style="text-align: center;">
+        <p><em>Created by <a href="https://philintheblank.me">Phil.</a></em></p>
+    </footer>
+  <script>
+  async function subscribe(e) {
+    e.preventDefault();
+    const phone = document.getElementById("phone").value.trim();
+    if (!phone) return showToast("Enter a phone number.", "error");
+    try {
+      const res = await fetch("/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (res.ok) showToast(data.message || "Subscribed!", "success");
+      else showToast(data.error || "Error subscribing.", "error");
+    } catch {
+      showToast("Network error.", "error");
+    }
+  }
+
+  async function unsubscribe() {
+    const phone = document.getElementById("phone").value.trim();
+    if (!phone) return showToast("Enter your phone number.", "error");
+    try {
+      const res = await fetch("/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (res.ok) showToast(data.message || "Unsubscribed.", "info");
+      else showToast(data.error || "Error unsubscribing.", "error");
+    } catch {
+      showToast("Network error.", "error");
+    }
+  }
+  </script>
+
 </body>
 </html>
