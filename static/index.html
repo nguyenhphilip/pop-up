@@ -438,12 +438,20 @@
   <hr>
   <footer style="text-align: center;">
         <p><em>Created by <a href="https://philintheblank.me">Phil.</a></em></p>
-    </footer>
+  </footer>
+  
   <script>
   async function subscribe(e) {
     e.preventDefault();
-    const phone = document.getElementById("phone").value.trim();
-    if (!phone) return showToast("Enter a phone number.", "error");
+    let phone = document.getElementById("phone").value.trim();
+
+    // --- Normalize phone number ---
+    phone = phone.replace(/[^\d+]/g, ""); // remove spaces, dashes, parentheses
+    if (!phone.startsWith("+")) {
+      if (phone.length === 10) phone = "+1" + phone; // assume U.S.
+      else return showToast("Please enter a valid phone number.", "error");
+    }
+
     try {
       const res = await fetch("/subscribe", {
         method: "POST",

@@ -57,10 +57,12 @@ def send_sms_to_all(message: str):
 
     for phone in list(subscribers):
         try:
-            twilio_client.messages.create(to=phone, from_=TWILIO_FROM, body=message)
-            print(f"✅ Sent SMS to {phone}")
+            msg = twilio_client.messages.create(to=phone, from_=TWILIO_FROM, body=message)
+            print(f"✅ Sent SMS to {phone} | SID: {msg.sid}")
         except Exception as e:
-            print(f"❌ Failed to send to {phone}: {e}")
+            # Use repr(e) to avoid deep formatting recursion
+            print(f"❌ Failed to send to {phone}: {repr(e)}")
+
 
 
 def broadcast_event(event_name: str):
@@ -123,14 +125,35 @@ def post_broadcast():
 
     broadcasts.append(broadcast)
 
-    # Send SMS to all subscribers
-    msg = f"📣 New pop-up from {user}: {note}"
+    # ----------------------------
+    # FORMAT SMS MESSAGE
+    # ----------------------------
+    # Example: "until 3:30pm EDT"
+    end_time = expires_at.astimezone().strftime("%-I:%M%p %Z").lower()
+
+    # If the broadcast includes location data, link to OpenStreetMap
+    if lat and lon:
+        # Use OpenStreetMap short link
+        # e.g., https://www.openstreetmap.org/?mlat=40.724&mlon=-73.943#map=16/40.724/-73.943
+        link = f"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=16/{lat}/{lon}"
+        msg = (
+            f"New pop-up from {user}: {note} (until {end_time}). "
+            f"Click for an approximate location on the map: {link}"
+        )
+    else:
+        msg = (
+            f"New pop-up from {user}: {note} (until {end_time}). "
+            f"More info at: pop-up-hang.onrender.com"
+        )
+
     send_sms_to_all(msg)
 
     # Notify connected browsers via SSE
     broadcast_event("new_broadcast")
 
     return jsonify({"delete_token": delete_token, "expires_at": expires_at.isoformat()})
+
+
 
 
 @app.route("/delete_broadcast", methods=["POST"])
